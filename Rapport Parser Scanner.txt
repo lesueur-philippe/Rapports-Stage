@@ -1,0 +1,868 @@
+-- TPRBScanner
+
+- atEnd
+(verify if type of current character is EOF)
+
+- classify: aCharacter
+(give the type of the character)
+if aCharacter is nil -> return nil
+translate aCharacter to interger form to analyse
+0 return #separator
+> 255 --> false return the answer in classificationTable at this index
+      --> true ask isLetter --> true return #alphabetic
+	                        --> false ask isSeparator --> true return #separator
+							                          --> false return nil
+
+- contents
+(give the content of the stream)
+creates a WriteStream with a buffer of 50 tokens
+while not atEnd (see upward) puts token in the buffer
+returns the content in the buffer
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! doesn't prevent that we exceed limitation of buffer
+
+- errorBlock
+return the instance variable errorBlock
+if nil then awaits a message and a position ([[:message :position | ]])
+
+- errorBlock: aBlock
+puts the block in instance variable errorBlock
+
+- errorPosition
+return the position of current stream
+
+- getComments
+return a collection of comments (length unknown)
+resets the collection comments (length 1)
+
+- isSelector
+if the type of the current character is binary then walk through all binary and return if character is EOF
+else if type is non alphabetic then return false
+else return if is non binary
+
+- isSelectorNonBinary
+cf diagramme showed in commentary
+non understood part is self scanName --> digits ?
+
+- next
+resets buffer (collection of 60) 
+record current position as begining of the token
+if current character if EOF, start new TPRBToken from after EOF else create corresponding token
+strips the separators
+put comments in token
+
+- nextPut: anObject
+Provide an error notification that the receiver does not implement this message.
+
+- on: aStream 
+initialize buffer (String 60), stream, classificationTable and comments (collection)
+
+- parseErrorNode: aMessageString
+return TPRBParseErrorNode with a message, the content of the error, the position of the error
+
+- previousStepPosition
+return to the previous position except if current is EOF
+?????????????????????????????????????????????????????????????? why
+
+- scanAnySymbol
+(create a token)
+if current is alphabetic, return scanSymbol
+else if binary return scanBinary: TPRBLiteralToken
+else return new TPRBToken
+
+- scanBinary: aClass
+(create a binary token)
+put current character in buffer then do it while characters are binary
+transfer the buffer in local variable val, transforms it in Symbol
+return aClass with a value val and a starting point tokenStart
+
+- scanError: theCause
+(create an error token)
+register current position
+put current character in buffer (if not nil) else move registered position one further
+return TPRBErrorToken with the concerned string, start position, theCause, the location of the error
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! general remark : if element missing the error position is 1 further
+
+- scanIdentifierOrKeyword
+(create an identifier or a keyword token)
+scan name
+if has : but is not variable affectation, then return scan keyword
+else verify if name if true, false or nil and return the corresponding TPRBLiteralToken
+else return TPRBIdentifierToken
+
+- scanKeyword
+(create a keyword token)
+while current character is :, put in buffer
+	update output and input positions to buffer and stream positions
+	go to 1 further
+	while current is alphabetic, we use scanName
+reset buffer and stream positions to output and input
+go to 1 further
+return a token in function of number of : occurences 
+1 : TPRBKeywordToken, 2+ : TPRBMultiKeywordLiteralToken
+
+- scanLiteral
+(create a token for a literal)
+go to 1 further
+if alphabetic return scanSymbol
+if binary return scanBinary: TPRBLiteralToken stopping at previous position
+if ' return scanStringSymbol
+if ( or [ ] return scanLiteralArrayToken
+if # return scanLiteral
+else return scanError: 'Expecting a literal type'
+
+- scanLiteralArrayToken
+(create a litteral array token)
+create token
+go to 1 further
+return token
+
+- scanLiteralCharacter
+go to 1 further
+if current is nil, return scanError: 'A Character was expected'
+create TPRBLiteralToken
+go to 1 further
+return token
+
+- scanLiteralString
+
+- scanName
+while character are alphabetic or digit, put them in buffer
+return self
+
+- scanNumber
+memorise the starting position
+got to 1 before start position
+parse number and scanError in case of error when parsing !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! parsing appening
+memorise the ending position
+got to 1 before start position
+memorise number in string form
+go to stop position
+go to 1 further
+return TPRBNumberLiteralToken with value (parsed), start pos, end pos, soure (string form)
+
+- scanSpecialCharacter
+if :, then go to 1 further, if affectation, go to 1 further, return TPRBAssignmentToken
+						    else return TPRBSpecialCharacterToken
+else if _, go to 1 further, return TPRBShortAssignmentToken
+else memorise char, go to 1 further, return TPRBSpecialCharacterToken with char
+
+- scanStringSymbol
+return scanLiteral literalToken with the value "literalToken value asSymbol"
+
+- scanSymbol
+while alphabetic or :, scanName, if :, put : in buffer, go to 1 further
+return TPRBLiteralToken
+
+- scanToken
+if alphabetic, return scanIdentifierOrKeyword
+if digit or (- and digit), return scanNumber
+if binary, return TPRBBinarySelectorToken
+if special, return scanSpecialCharacter
+if ', return scanLiteralString
+if #, return scanLiteral
+if $, return scanLiteralCharacter
+else return scanUnknownCharacter
+
+- scanUnknownCharacter
+memorise error token
+go to 1 further
+return token
+
+- scannerError: aString
+if errorBlock is nil, return SyntaxErrorNotification
+else return self
+
+- step
+if EOF, rewrite type as eof, return current:= nil
+else go to next, set character type to new character
+return current character
+
+- stripComment
+get start pos
+go to 1 further
+if EOF, return scannerError:'Unmatched " in comment.'
+else while " and next not ",  if EOF, then return scannerError: 'Unmatched " in comment.'
+                              else go to 1 further
+if EOF, then stop at current pos else go 1 back
+add from start to stop to comments
+
+- stripSeparators
+while, (while separator, go to 1 further), ", striComments
+
+
+
+
+
+
+-- TPRBScannerTest
+
+- testNextLiteralCharacterWithAMissingCharacter
+test for scanner next
+test : error token with 'A Character was expected'
+
+- testNextWithAWrongSymbolGetError
+test for scanner next
+test : error token with 'Expecting a literal type'
+
+- testNextWithAnIdentifierTokenGetTheIdentifierToken
+test the creation of an identifier token for the source 'identifierToken' for scanner next
+test : identifier token
+test : no error token
+test : value = 'identifierToken'
+
+- testNextWithAnOpeningCommentAtEndGetError
+test bad comment error for scanner next
+test : raise SyntaxErrorNotification
+
+- testNextWithAnOpeningCommentGetError
+test bad comment (lack of closure) error for scanner next
+test : raise SyntaxErrorNotification
+
+- testNextWithAnOpeningStringsGetError
+test bad string (lack of closure) error for scanner next
+test : error token with 'Unmatched '' in string literal.'
+
+- testNextWithAnUnknownCharacterGetError
+test for unknown character
+test : error token with 'Unknown character'
+
+- testNextWithTwoDoubleQuotesInComment
+test the presence of double quotes in comment for scannner next
+test : do not raise SyntaxErrorNotification
+test : comment is read as one 
+
+- testNextWithTwoDoubleQuotesInCommentGetError
+test bad comment (lack of closure) error with a double quote in it for scanner next
+test : raise SyntaxErrorNotification
+
+- testScanTokenObjects1
+test for scanTokenObjects
+test : verify that token contains all the right values
+
+- testScanTokenObjects2
+test for scanTokenObjects containing double quotes
+test : verify that token contains all the right values
+
+- testScanTokens1
+test for scanTokens 
+--> same as testScanTokenObjects1 but collected (more refined)
+
+- testScanTokens2
+test for scanTokens 
+--> same as testScanTokenObjects2 but collected (more refined)
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no test for individual scanners
+- no test for separators
+- no test for isSelector, isSelectorNonBinary, getComments, contents, previousStepPosition
+- why is there ParseErrorNode and ParseNumber in scanner
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+-- TPRBParser
+
+- addCommentsTo: aNode
+add parser comments to a node with its' already existing comments
+reinitialize parser comments
+
+- addParserError: errorMessage to: aNode
+create parsed error node
+add erreur node to aNode
+return aNode
+
+- addPragma: aPragma
+if nil create collection
+add aPragma to end of collection
+
+- arrayNodeClass
+return TPRBArrayNode
+
+- assignmentNodeClass
+return TPRBAssignmentNode
+
+- atEnd
+is TPRBToken (marks EOF)
+
+- basicParsePragma
+if current token is identifier, return parseUnaryPragma
+else if is keyword, if is primitive keyword, return parsePrimitiveKeywordPragma
+                    else parseKeywordPragma
+	 else parseBinaryPragma
+	 
+- blockNodeClass
+return TPRBBlockNode
+
+- cascadeNodeClass
+return TPRBCascadeNode
+
+- currentToken
+return instance variable currentToken
+
+- errorBlock
+return the instance variable errorBlock
+if nil then awaits a message and a position ([[:message :position | ]])
+
+- errorBlock: aBlock
+puts the block in instance variable errorBlock
+if instance variable scanner is not nil, put block in scanner
+
+- errorPosition
+if current token is nil, return 1
+else return block accepting a token and giving start position
+
+- extractCommentsFrom: aToken
+collect comments from token to create a new token to be put in parser comments
+
+- initialize
+initialize comments to an empty collection
+
+- initializeParserWith: aString
+initialize instance variable source at aString
+initialize scanner with readstream of aString and error block
+
+- literalArrayNodeClass
+return TPRBLiteralArrayNode
+
+- literalNodeClass
+return TPRBLiteralNode
+
+- literalValueNodeClass
+return TPRBLiteralValueNode
+
+- messageNodeClass
+return TPRBMessageNode
+
+- methodNodeClass
+return TPRBMethodNode
+
+- nextToken
+if nil return scannerNext
+else return instance variable nextToken
+
+- parseArgs
+create collection
+while current token is identifier, add parseVariableNode to collection
+return collection
+
+- parseArray
+memorise current position
+go to 1 further
+create new arrayNode with position in left
+parse statement list in arrayNode without pragmas
+if currentToken is special and }, then put start position of token in right of node, got to 1 further, return node
+else return parserError: 'expected }'
+
+- parseAssignment
+if current token is identifier and next is assignment, then parseVariableNode, save position as token start, go to 1 further, return assignment node with VariableNode, parseAssignment and position
+else return parseCascadeMessage
+
+- parseBinaryMessage
+parse Unary Message
+while (if currentToken is litteral, then patchNegativeLiteral) currentToken is binary, parseBinaryMessageWith: parsed Unary Message
+return final parsed node
+
+- parseBinaryMessageWith: aNode
+memorise current token
+go to 1 further
+return messageNodeClass, with aNode, token value, array with token start, array with parseUnaryMessage
+
+- parseBinaryPattern
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- TPRBParserTest
+
+- testArray
+test that parseExpression of an array give the good amount of 
+for each statement of a list (representing different arrays and their expected delimitations)
+test : statements size equals number of statements
+test : periods size equals number of dots
+test : left begins at the begining
+test : right finishes at the end
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no verification on what is inside statments and periods, 
+- left and right aren't realy tested
+- no bad arrays verification
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testArrayNodesArentArrays
+test that array nodes aren't confused with arrays
+test : node is not array
+test : node is dynamic array
+test : non array node isn't dynamic array
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no verification on type of the nodes
+- complicated as we are not realy sure parseExpression: '{ 1 . 2 . 3}' will give RBArrayNode
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testBestNodeFor
+test that parseMethod uses the best nodes
+for each statement of a parsed method, if not empty source interval
+test : parsed method has best node source interval or (parent is cascade and parent last message is node)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- test uneasy to understand --> what is tested ? parseMethod, bestNodeFor, last message of parent ?
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testBinarySelectors
+test parseMethod for binary selectors of size 1 to 3 (3615 selectors tested)
+test : node selector is selector
+test : node argumentNames is anObject
+test : node statements size is 1
+test : node statement is message
+test : node statement has self for receiver
+test : node statement right selector
+test : node statement arguments size is 1
+test : node statement argument is a value
+test : node statement argument is anObject
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- exhaustive test for binary selectors from 1 to 3, no need for more but could be better for futur implementations
+- no test for failures
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testBlockNodeIsUsed
+test if block nodes are used nodes
+test : parsed 'tmp [ 3+4 ]' shouldn't be a used node
+test : parsed 'tmp [ ^3+4 ]' shouldn't be a used node
+test : parsed 'tmp ^[ 3+4 ]' should be a used node
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no verification that the node is a block node
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testBlockReturnNode
+test if block nodes are used nodes
+test : parsed 'tmp [ 3+4 ]' shouldn't be a return
+test : parsed 'tmp [ ^3+4 ]' shouldn't be a return
+test : parsed 'tmp ^[ 3+4 ]' should be a return
+
+- testCascade
+test if produces cascades correctly
+test : parseExpression: ' self msg; yourself' should be cascade
+test : parseExpression: ' self msg:(arg msg:arg); yourself' should be cascade
+test : parseExpression: ' (self msg); yourself' shouldn't be cascade
+test : parseExpression: ' self ; yourself' shouldn't be cascade
+test : parseExpression: ' (self) ; yourself' shouldn't be cascade
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no test to confirm what is in cascade
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testCascadeReplacement
+test if replaceWith replaces the correct element in cascade
+test : should be equal
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- single test at single message
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testComparingTrees
+test if compar: to: is working as intended
+test : treeWithEverything should compare to treeWithEverything
+test : treeWithReallyEverything should compare to treeWithReallyEverything
+test : parseTreeFor: selector should compare to parseTreeFor: selector
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testCopy
+test if copy produces the same parsed method
+test : tree should compare to tree copy
+test : tree should compare to tree copy
+test : tree should compare to tree copy
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testCopyInContext
+test if copyInContext produces the same parsed method
+test : tree should compare to tree copyInContext
+test : tree should compare to tree copyInContext
+test : tree should compare to tree copyInContext
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no change in context
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testCreationProtocol
+test the right creation of a node from a parsed expression
+test : TPRBMessageNode should compare to parsed expression
+test : TPRBMethodNode  should compare to parsed expression
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- non exhaustive node creation (not sure)
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testEqualToWithMapping
+test if copyInContext produces the same parsed method
+test : tree should compare to tree withMapping
+test : tree should compare to tree withMapping
+test : tree should compare to tree withMapping
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no change in mapping
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testEquivalentExceptRenaming
+test if equalTo analizes well the equivalence between 2 parsed expressions
+test : (parseMethod:firstMethod equalTo: parseMethod:secondMethod) must correspond with given boolean
+
+- testFormatter ???????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+didn't understand this one 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- test failure occuring : comparison between 2 litteral nodes -> 1 space difference
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testIntervals
+test if nodes with no direct parentage and not pragmas their intervals is the right one
+test : node from tree should compare to node parsed from copy of onterval
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- test error occuring : self at: index put: (replacement at: repOff + index) -> repOff + index = 244 but replacement has only 243 items
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testInvalidPragmaPosition
+test the raise of error when pragma badly positionned
+test : parseMethod should raise SyntaxErrorNotification
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- could be better to have positives not raising errors too
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testIsA
+test every nodes of treeWithEverything corresponds to every type given in list
+test : nodes should have been emptied by the corrsepondance with treeWithEverything
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- don't fully understand the logic behind the test
+- there is no case for non corresponding responses
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+
+- testLiteralArray
+test the good parsing of a litteral array with parseExpression
+test : tree value should be equal to value from collection
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testLiteralIntevals
+test if parseExpression gives the good intervals
+test : a should begin in 3
+test : a should end in 4
+test : c should start in 11
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- comprehension problem on my side : thought c would start at 10
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testMatchInContext
+test if match in context gives the same parsed tree
+test : tree match tree in context {} should return true
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no context changes
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testMethodPatterns
+test if parseMethodPattern gives the right answer
+test : parseMethodPattern should be identical to methodPattern
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testModifying
+test to see if the modifications are the ones expected (addReturn, addTemporaryNamed, removeTemporaryNamed)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- error(s) in the test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testNegativeNumberError
+test the raise of an error when parsing negative number
+test : parseExpression should raise SyntaxErrorNotification
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- could have more tests with more context
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testNodesDo
+test if nodesDo works as intended
+test :  nodesDo gives the right number of nodes in the tree
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no test to check content of nodes
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testNumberParsing
+test that parseExpression on numbers gives the right result
+test : parsing expression should give said expression in source
+test : parsing expression should give the corresponding number 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testNumberRadixParsing
+test if parsing the string of a radix number gets rid of the first part or not
+test : parsed radix equals to normal number
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParents
+test if in a parsed expression, parents' children have the good parent
+test : for 2 parsed expressions and their copies for each child, parent is identical or re-creation of the tree gives the same one
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseFaultyBlock
+test if a faulty block is recognised as such
+test : node should be a block
+test : node should be faulty
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseFaultyLiteral
+test if a faulty litteral or litteral array is recognised as such
+test : node faultyLiteral should be faulty
+test : node faultyLiteral should be sequence
+test : node faultyLiteral should have 'Unknown character' as error message
+test : node faultyLiteralArray should be faulty
+test : node faultyLiteralArray should be litteral array
+test : node faultyLiteralArray should have 'Unknown character' as error message
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+- should have more error types 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseFaultyMethod
+test if a faulty method is recognised as such
+test : node should be method
+test : node should be faulty
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- error(s) in the test --> asSequenceNode cause trouble because not TPRBMethodNode
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseFaultyMethodExpresionHasErrorNodeAsFinal
+test if a faulty method is recognised as such and has a error node 
+test : node should be method
+test : node should be faulty
+test : node should have 2 statements
+test : node last statements should be faulty
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+- restrained test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseFaultyMethodMessagePattern
+test if a faulty method is recognised as such
+test : node should be method
+test : node should be faulty
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- error(s) in the test --> asSequenceNode cause trouble because not TPRBMethodNode
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseFaultyMethodStop
+test if a faulty method is recognised as such and stops at right place 
+test : node should be method
+test : node should be faulty
+test : node should stop at 28
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- failure in the test --> Stop at 26 not 26
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseFaultyPragma
+test if a faulty method is recognised as such
+test : node should be method
+test : node pragmas should be of size 1
+test : node pragma should be faulty
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+- single test on single pragma
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseMethodWhichEndsWithUncompleteStringWithEscapedMarkAtTheEnd
+test what is said on the name
+test : node should be method
+test : node should be faulty
+test : node arguments should be empty
+test : node body should be sequence
+test : node body should be faulty
+test : node body temporaries should include TPRBVariableNode name 'temp'
+test : node body's first statement should be faulty
+test : node body's first statement should be assignement
+test : node body's first statement's value should be faulty
+test : node body's first statement's value's arguments should have a size of 1
+test : node body's first statement's value's argument should be faulty
+test : node body's first statement's value's argument's value should be 'wrong'''
+test : node body's first statement's value's argument's error message should be 'Unmatched '' in string literal.'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseMethodWithErrorTokenIsWellFormed
+test what is said on the name (follows precedent)
+test : node should be method
+test : node should be faulty
+test : node arguments should be empty
+test : node body should be sequence
+test : node body should be faulty
+test : node body temporaries should include TPRBVariableNode name 'temp'
+test : node body's first statement should be faulty
+test : node body's first statement should be assignement
+test : node body's first statement's value should be faulty
+test : node body's first statement's value's arguments should have a size of 1
+test : node body's first statement's value's argument should be faulty
+test : node body's first statement's value's argument's value should be 'wrong because no end. ^temp'.
+test : node body's first statement's value's argument's error message should be 'Unmatched '' in string literal.'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParseUnfinishedBlockWithFaultyBody
+test if a block error prevent from detecting other errors in block or not
+test : parseFaultyExpression node should be block 
+test : parseFaultyExpression node should be faulty
+test : parseFaultyExpression node body should be faulty
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParserErrors
+test parseError
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-doesn't seem like real test as there is no expected value, error or else
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testParserErrorsWithErrorBlock
+Parse source with errors and ensure we identify them
+test : count of TPRBParseErrorNodeVisitor should be the same as given
+
+- testParsingLiteralMessages
+test that litteral messages are recognized as messages
+test : parsed expression should be message
+test : parsed method should be method
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testPositions
+test the positions of a parsed expression
+test : 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testPragmaConstantLiteralArgument
+test if parseMethod raises exception
+test : should/n't raise Exception
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- doesn't test content
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testPragmaImplicitLiteralArrayIsInvalid
+test if invalid in parse raise exception
+test : parseMethod should raise Exception
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+- 2 tests not labelled as such 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testPragmaPrimitiveError
+test parseMethod with pragma primitive error
+test : size of pragmas should be 1
+test : selector from pargma should be the given
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+- test only with multiple keywords selector
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testPragmas
+test parseMethod with pragmas
+test : size of pragmas should be 1
+test : selector from pargma should be the given
+test : each pragma argument should correspond to given
+test : pragma start and stop should correspond to < and > in the source
+test : parseMethod should be method
+test : parseMethod should be method
+test : parseMethod should raise SyntaxErrorNotification
+
+- testPrimitives
+test if method parsed is primitive
+test : (didn't quit understand)
+test : parseMethod isPrimitive should give the expected boolean
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- did not understand what a primitive was
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testQuerying
+test the different access methods for a parsed method
+test : selfMessages should give a collection of the messages to self
+test : superMessages should give a collection of the messages to super
+test : whichNodeIsContainedBy: (num to: num) should give the correct node
+test : statementNode should give the correct node
+test : whoDefines: name should give the node type
+test : allDefinedVariables should give a collection of the used variables
+test : allArgumentVariables should give a collection of the argument variables of the children
+test : allTemporaryVariables should give a collection of the variables defined in the method
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testQueryingPrimitiveErrorVar
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- did not understand what a primitive was
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testReplacingNodes
+test that parseMethod is able to treat replaceable node 
+test : parseMethod should give the same result as an other parse method with renamed temporary variables
+test : removeDeadCode should remove unconsequencial code
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testStatements
+test the good parsing of statements with parseExpression
+test : statements size should be equal to expected
+test : periods size should be equal to expected
+
+- testString
+test different methods with strings
+test : parseMethod is method
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- no failure test
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+- testSymbolLiteral
+test parsed expressions to see if matched with expected result
+test : parsed expression value equals expected result
+test : parsed expression starts at 1
+test : parsed expression ends at the end of the string
+test : parsed expression that are faulty should raise SyntaxErrorNotification
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- parseExpression, parseMethod and parseError are fully tested but not the other (smaller) parsers
+- methods like atEnd, nextToken, step are not tested
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
